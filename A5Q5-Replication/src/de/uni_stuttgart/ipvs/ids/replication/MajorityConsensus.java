@@ -175,7 +175,7 @@ public class MajorityConsensus<T> {
 		}	
 	}
 	}
-
+	
 	/**
 	 * Part c) Implement this method.
 	 */
@@ -279,5 +279,4 @@ public class MajorityConsensus<T> {
 		
 		return replies;
 	}
-
 }
