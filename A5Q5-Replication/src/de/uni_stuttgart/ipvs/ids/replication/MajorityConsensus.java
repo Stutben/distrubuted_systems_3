@@ -12,7 +12,6 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.Vector;
 
 import de.uni_stuttgart.ipvs.ids.communication.MessageWithSource;
 import de.uni_stuttgart.ipvs.ids.communication.NonBlockingReceiver;
@@ -46,8 +45,34 @@ public class MajorityConsensus<T> {
 	/**
 	 * Part c) Implement this method.
 	 */
-	protected Collection<MessageWithSource<Vote>> requestReadVote() throws QuorumNotReachedException {
+	protected Collection<MessageWithSource<Vote>> requestReadVote() throws QuorumNotReachedException, IOException, ClassNotFoundException {
 		// TODO: Implement me!
+		Iterator<SocketAddress> it = replicas.iterator();
+
+		ByteArrayOutputStream baos = new ByteArrayOutputStream(5000);
+
+		ObjectOutputStream oos = new ObjectOutputStream(baos);
+
+		RequestReadVote requestReadVote = new RequestReadVote();
+
+		while(it.hasNext()){
+
+			SocketAddress address = it.next();
+
+			oos.flush();
+
+			oos.writeObject(requestReadVote);
+
+			oos.flush();
+
+			byte[] sendBuffer = baos.toByteArray();
+
+			DatagramPacket sendPacket = new DatagramPacket(sendBuffer, sendBuffer.length, address);
+
+			socket.send(sendPacket);
+
+		}
+		return nbio.unpack(nbio.receiveMessages(1000, replicas.size()));
 	}
 	
 	/**
@@ -149,7 +174,8 @@ public class MajorityConsensus<T> {
 				
 		}	
 	}
-	
+	}
+
 	/**
 	 * Part c) Implement this method.
 	 */
@@ -195,7 +221,6 @@ public class MajorityConsensus<T> {
 	 */
 	public VersionedValue<T> get() throws QuorumNotReachedException {
 		// TODO: Implement me
-		
 	}
 
 	/**
@@ -204,7 +229,6 @@ public class MajorityConsensus<T> {
 	 */
 	public void set(T value) throws QuorumNotReachedException {
 		// TODO: Implement me!
-		
 	}
 
 	/**
@@ -216,7 +240,44 @@ public class MajorityConsensus<T> {
 	 */
 	protected Collection<MessageWithSource<Vote>> checkQuorum(
 			Collection<MessageWithSource<Vote>> replies) throws QuorumNotReachedException {
-		// TODO: Implement me!
+	Iterator<MessageWithSource<Vote>> it = replies.iterator();
+		
+		int writequorum = replicas.size() / 2 + 1;
+		int readquorum = replicas.size() / 2;
+		int readlocks = 0;
+		int writelocks = 0;
+		
+		while (it.hasNext()){
+			
+			MessageWithSource<Vote> currentMessage = it.next();
+			if (currentMessage.getMessage().getState() == Vote.State.YES ){
+				
+				if(currentMessage.getMessage().getVersion() == -1){
+					
+					writelocks ++;
+				}
+				else{
+				
+					readlocks ++;
+				}
+			}
+			else{
+				
+				replies.remove(currentMessage);
+			}
+				
+		}
+		
+		if(writelocks < writequorum) 
+		
+			throw new QuorumNotReachedException(writequorum, MessageWithSource.getSources(replies));
+
+		else if(readlocks < readquorum){
+			
+			throw new QuorumNotReachedException(readquorum, MessageWithSource.getSources(replies)); 
+		}
+		
+		return replies;
 	}
 
 }
