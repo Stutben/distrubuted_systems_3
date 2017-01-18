@@ -41,8 +41,7 @@ public class Replica<T> extends Thread {
 	 * This address holds the addres of the client holding the lock. This
 	 * variable should be set to NULL every time the lock is set to UNLOCKED.
 	 */
-	// protected SocketAddress lockHolder;
-	protected LinkedList<SocketAddress> lockHolder;
+	protected SocketAddress lockHolder;
 
 	public Replica(int id, int listenPort, double availability, T initialValue) throws SocketException {
 		super("Replica:" + listenPort);
@@ -52,8 +51,6 @@ public class Replica<T> extends Thread {
 		this.availability = availability;
 		this.value = new VersionedValue<T>(0, initialValue);
 		this.lock = LockType.UNLOCKED;
-		// add
-		lockHolder = new LinkedList<SocketAddress>();
 	}
 
 	/**
@@ -91,7 +88,7 @@ public class Replica<T> extends Thread {
 					// no write lock
 					if (lock != LockType.WRITELOCK) {
 						lock = LockType.READLOCK;
-						lockHolder.add(sender);
+						lockHolder = sender;
 						sendVote(sender, Vote.State.YES, value.getVersion());
 						// write lock
 					} else {
@@ -101,7 +98,7 @@ public class Replica<T> extends Thread {
 					// no read or write lock
 					if (lock == LockType.UNLOCKED) {
 						lock = LockType.WRITELOCK;
-						lockHolder.add(sender);
+						lockHolder = sender;
 						sendVote(sender, Vote.State.YES, value.getVersion());
 						// locked
 					} else {
@@ -109,7 +106,7 @@ public class Replica<T> extends Thread {
 					}
 				} else if (o instanceof ReadRequestMessage) {
 					// check if sender is lockholder
-					if (lockHolder.contains(sender) && lock == LockType.READLOCK) {
+					if (lockHolder == sender && lock == LockType.READLOCK) {
 						// prepare ValueResponseMessage
 						ValueResponseMessage<VersionedValue<T>> message = new ValueResponseMessage<VersionedValue<T>>(
 								value);
@@ -122,7 +119,7 @@ public class Replica<T> extends Thread {
 					}
 				} else if (o instanceof WriteRequestMessage) {
 					// check if sender is lockholder
-					if (lockHolder.contains(sender) && lock == LockType.WRITELOCK) {
+					if (lockHolder == sender && lock == LockType.WRITELOCK) {
 						// write value
 						value = (VersionedValue<T>) o;
 
@@ -134,12 +131,10 @@ public class Replica<T> extends Thread {
 					}
 				} else if (o instanceof ReleaseReadLock) {
 					// check if sender is lockholder
-					if (lockHolder.contains(sender) && lock == LockType.READLOCK) {
+					if (lockHolder == sender && lock == LockType.READLOCK) {
 						// release lock
-						lockHolder.remove(sender);
-						if (lockHolder.isEmpty()) {
-							lock = LockType.UNLOCKED;
-						}
+						lockHolder = null;
+						lock = LockType.UNLOCKED;
 
 						// send ack
 						sendVote(sender, Vote.State.YES, -1);
@@ -150,9 +145,9 @@ public class Replica<T> extends Thread {
 					}
 				} else if (o instanceof ReleaseWriteLock) {
 					// check if sender is lockholder
-					if (lockHolder.contains(sender) && lock == LockType.WRITELOCK) {
+					if (lockHolder == sender && lock == LockType.WRITELOCK) {
 						// release lock
-						lockHolder.remove(sender);
+						lockHolder = null;
 						lock = LockType.UNLOCKED;
 
 						// send ack
