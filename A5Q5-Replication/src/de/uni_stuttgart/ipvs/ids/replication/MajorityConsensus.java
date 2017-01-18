@@ -51,8 +51,48 @@ public class MajorityConsensus<T> {
 	/**
 	 * Part c) Implement this method.
 	 */
-	protected void releaseReadLock(Collection<SocketAddress> lockedReplicas) {
-		// TODO: Implement me!
+	protected void releaseReadLock(Collection<SocketAddress> lockedReplicas) throws IOException {
+		
+		ReleaseReadLock release_RL = new ReleaseReadLock();
+		Iterator<SocketAddress> it = lockedReplicas.iterator();
+		
+		ByteArrayOutputStream baos = new ByteArrayOutputStream(5000);
+		ObjectOutputStream oos = new ObjectOutputStream(baos);
+		
+		while(lockedReplicas.isEmpty() == false){
+		
+			while (it.hasNext() == true){
+				
+				SocketAddress socketaddr =  it.next();
+				
+				oos.flush();
+				oos.writeObject(release_RL);
+				oos.flush();
+	
+				byte[] sendBuffer = baos.toByteArray();
+				DatagramPacket sendPacket = new DatagramPacket(sendBuffer, sendBuffer.length, socketaddr);
+							
+				try{
+					socket.send(sendPacket);
+				}
+				catch(Exception e) {
+				}
+			}
+			
+			Vector<DatagramPacket> packets = nbio.receiveMessages(200, lockedReplicas.size());
+			Collection<MessageWithSource<Vote>> messages = null;
+			
+			try {
+				messages = NonBlockingReceiver.unpack(packets);
+			}
+			catch(Exception e)
+			{}
+			
+			Collection<SocketAddress> responders = MessageWithSource.getSources(messages);
+			
+			lockedReplicas.removeAll(responders);
+				
+		}
 	}
 	
 	/**
@@ -65,8 +105,48 @@ public class MajorityConsensus<T> {
 	/**
 	 * Part d) Implement this method.
 	 */
-	protected void releaseWriteLock(Collection<SocketAddress> lockedReplicas) {
-		// TODO: Implement me!
+	protected void releaseWriteLock(Collection<SocketAddress> lockedReplicas) throws IOException{
+		ReleaseWriteLock release_WL = new ReleaseWriteLock();
+		Iterator<SocketAddress> it = lockedReplicas.iterator();
+		
+		ByteArrayOutputStream baos = new ByteArrayOutputStream(5000);
+		ObjectOutputStream oos = new ObjectOutputStream(baos);
+		
+		while(lockedReplicas.isEmpty() == false){
+		
+			while (it.hasNext() == true){
+				
+				SocketAddress socketaddr =  it.next();
+				
+				oos.flush();
+				oos.writeObject(release_WL);
+				oos.flush();
+	
+				byte[] sendBuffer = baos.toByteArray();
+				DatagramPacket sendPacket = new DatagramPacket(sendBuffer, sendBuffer.length, socketaddr);
+							
+				try{
+					socket.send(sendPacket);
+				}
+				catch(Exception e) {
+				}
+			}
+			
+			Vector<DatagramPacket> packets = nbio.receiveMessages(200, lockedReplicas.size());
+			Collection<MessageWithSource<Vote>> messages = null;
+			
+			try {
+				messages = NonBlockingReceiver.unpack(packets);
+			}
+			catch(Exception e)
+			{}
+			
+			Collection<SocketAddress> responders = MessageWithSource.getSources(messages);
+			
+			lockedReplicas.removeAll(responders);
+				
+		}	
+	}
 	}
 	
 	/**
