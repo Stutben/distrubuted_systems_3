@@ -246,7 +246,40 @@ public class MajorityConsensus<T> {
 	 * replicated value using the majority consensus protocol.
 	 */
 	public VersionedValue<T> get() throws QuorumNotReachedException {
-		// TODO: Implement me
+		
+		Collection<MessageWithSource<Vote>> lockedreplies = null;
+		
+		try{
+			lockedreplies = this.requestReadVote();
+
+		}
+		catch(QuorumNotReachedException e){
+			
+			this.releaseReadLock(e.getAchieved());
+			throw e;			
+		}
+		
+		
+		Iterator<MessageWithSource<Vote>> it = lockedreplies.iterator();
+		
+		int serialmax = 0;
+		SocketAddress maxSocket = null;
+		while (it.hasNext()){
+			
+			MessageWithSource<Vote> currentmessage = it.next();
+			int currentserial = currentmessage.getMessage().getVersion();
+			if(currentserial > serialmax){
+				
+				serialmax = currentserial;
+				maxSocket = currentmessage.getSource();
+			}
+		}
+		
+		VersionedValue<T> result = new VersionedValue(serialmax, this.readReplica(maxSocket));
+		
+		this.releaseReadLock(MessageWithSource.getSources(lockedreplies));
+		
+		return result; 
 	}
 
 	/**
