@@ -34,14 +34,14 @@ public class Replica<T> extends Thread {
 	private VersionedValue<T> value;
 
 	protected DatagramSocket socket = null;
-	
+
 	protected LockType lock;
-	
+
 	/**
 	 * This address holds the addres of the client holding the lock. This
 	 * variable should be set to NULL every time the lock is set to UNLOCKED.
 	 */
-	//protected SocketAddress lockHolder;
+	// protected SocketAddress lockHolder;
 	protected LinkedList<SocketAddress> lockHolder;
 
 	public Replica(int id, int listenPort, double availability, T initialValue) throws SocketException {
@@ -52,113 +52,119 @@ public class Replica<T> extends Thread {
 		this.availability = availability;
 		this.value = new VersionedValue<T>(0, initialValue);
 		this.lock = LockType.UNLOCKED;
-		//add
+		// add
 		lockHolder = new LinkedList<SocketAddress>();
 	}
-	
 
 	/**
 	 * Part a) Implement this run method to receive and process request
 	 * messages. To simulate a replica that is sometimes unavailable, it should
-	 * randomly discard requests as long as it is not locked.
-	 * The probability for discarding a request is (1 - availability).
+	 * randomly discard requests as long as it is not locked. The probability
+	 * for discarding a request is (1 - availability).
 	 * 
-	 * For each request received, it must also be checked whether the request is valid.
-	 * For example:
-	 * - Does the requesting client hold the correct lock?
-	 * - Is the replica unlocked when a new lock is requested?
+	 * For each request received, it must also be checked whether the request is
+	 * valid. For example: - Does the requesting client hold the correct lock? -
+	 * Is the replica unlocked when a new lock is requested?
 	 */
-	public void run() {	
-		
+	public void run() {
+
 		try {
-			//receive a message
+			// receive a message
 			byte[] receiveBuffer = new byte[5000];
 			DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
 			socket.receive(receivePacket);
 			Object o = getObjectFromMessage(receivePacket);
-			
-			//logic
+
 			
 			SocketAddress sender = receivePacket.getSocketAddress();
-			
-			//TODO: availability
-			
-			if(o instanceof RequestReadVote){
-				//no write lock
-				if(lock != LockType.WRITELOCK){
-					lock = LockType.READLOCK;
-					lockHolder.add(sender);
-					sendVote(sender, Vote.State.YES , value.getVersion());
-				//write lock	
-				}else{
-					sendVote(sender, Vote.State.NO, -1);
-				}
-			}else if (o instanceof RequestWriteVote) {
-				//no read or write lock
-				if(lock == LockType.UNLOCKED){
-					lock = LockType.WRITELOCK;
-					lockHolder.add(sender);
-					sendVote(sender, Vote.State.YES , value.getVersion());
-				//locked	
-				}else{
-					sendVote(sender, Vote.State.NO, -1);
-				}
-			}else if (o instanceof ReadRequestMessage) {
-				//check if sender is lockholder
-				if(lockHolder.contains(sender) && lock == LockType.READLOCK){
-					//prepare ValueResponseMessage
-					ValueResponseMessage<VersionedValue<T>> message = new ValueResponseMessage<VersionedValue<T>>(value);
-					
-					//send message
-					sendObject(sender, message);
-				//sender is not lockholder	
-				}else{
-					sendVote(sender, Vote.State.NO, -1);
-				}
-			}else if (o instanceof WriteRequestMessage) {
-				//check if sender is lockholder
-				if(lockHolder.contains(sender) && lock == LockType.WRITELOCK){
-					//write value
-					value = (VersionedValue<T>) o;
-					
-					//send ack
-					sendVote(sender, Vote.State.YES, -1);
-				//sender is not lockholder	
-				}else{
-					sendVote(sender, Vote.State.NO, -1);
-				}
-			}else if (o instanceof ReleaseReadLock) {
-				//check if sender is lockholder
-				if(lockHolder.contains(sender) && lock == LockType.READLOCK){
-					//release lock
-					lockHolder.remove(sender);
-					if(lockHolder.isEmpty()){
-						lock = LockType.UNLOCKED;
+
+			//availability
+			double failurePosibility = 0;
+			if (lock == LockType.UNLOCKED) {
+				failurePosibility = 1 - availability;
+			}
+
+			if (Math.random() >= failurePosibility) {
+				
+				//logic
+				if (o instanceof RequestReadVote) {
+					// no write lock
+					if (lock != LockType.WRITELOCK) {
+						lock = LockType.READLOCK;
+						lockHolder.add(sender);
+						sendVote(sender, Vote.State.YES, value.getVersion());
+						// write lock
+					} else {
+						sendVote(sender, Vote.State.NO, -1);
 					}
-					
-					//send ack
-					sendVote(sender, Vote.State.YES, -1);
-				//sender is not lockholder	
-				}else{
-					//send nack
-					sendVote(sender, Vote.State.NO, -1);
-				}
-			}else if (o instanceof ReleaseWriteLock) {
-				//check if sender is lockholder
-				if(lockHolder.contains(sender) && lock == LockType.WRITELOCK){
-					//release lock
-					lockHolder.remove(sender);
-					lock = LockType.UNLOCKED;
-					
-					//send ack
-					sendVote(sender, Vote.State.YES, -1);
-				//sender is not lockholder	
-				}else{
-					//send nack
-					sendVote(sender, Vote.State.NO, -1);
+				} else if (o instanceof RequestWriteVote) {
+					// no read or write lock
+					if (lock == LockType.UNLOCKED) {
+						lock = LockType.WRITELOCK;
+						lockHolder.add(sender);
+						sendVote(sender, Vote.State.YES, value.getVersion());
+						// locked
+					} else {
+						sendVote(sender, Vote.State.NO, -1);
+					}
+				} else if (o instanceof ReadRequestMessage) {
+					// check if sender is lockholder
+					if (lockHolder.contains(sender) && lock == LockType.READLOCK) {
+						// prepare ValueResponseMessage
+						ValueResponseMessage<VersionedValue<T>> message = new ValueResponseMessage<VersionedValue<T>>(
+								value);
+
+						// send message
+						sendObject(sender, message);
+						// sender is not lockholder
+					} else {
+						sendVote(sender, Vote.State.NO, -1);
+					}
+				} else if (o instanceof WriteRequestMessage) {
+					// check if sender is lockholder
+					if (lockHolder.contains(sender) && lock == LockType.WRITELOCK) {
+						// write value
+						value = (VersionedValue<T>) o;
+
+						// send ack
+						sendVote(sender, Vote.State.YES, -1);
+						// sender is not lockholder
+					} else {
+						sendVote(sender, Vote.State.NO, -1);
+					}
+				} else if (o instanceof ReleaseReadLock) {
+					// check if sender is lockholder
+					if (lockHolder.contains(sender) && lock == LockType.READLOCK) {
+						// release lock
+						lockHolder.remove(sender);
+						if (lockHolder.isEmpty()) {
+							lock = LockType.UNLOCKED;
+						}
+
+						// send ack
+						sendVote(sender, Vote.State.YES, -1);
+						// sender is not lockholder
+					} else {
+						// send nack
+						sendVote(sender, Vote.State.NO, -1);
+					}
+				} else if (o instanceof ReleaseWriteLock) {
+					// check if sender is lockholder
+					if (lockHolder.contains(sender) && lock == LockType.WRITELOCK) {
+						// release lock
+						lockHolder.remove(sender);
+						lock = LockType.UNLOCKED;
+
+						// send ack
+						sendVote(sender, Vote.State.YES, -1);
+						// sender is not lockholder
+					} else {
+						// send nack
+						sendVote(sender, Vote.State.NO, -1);
+					}
 				}
 			}
-			
+
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -166,53 +172,51 @@ public class Replica<T> extends Thread {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		
-		
-		
+
 	}
-	
+
 	/**
-	 * This is a helper method. You can implement it if you want to use it or just ignore it.
-	 * Its purpose is to send a Vote (YES/NO depending on the state) to the given address.
+	 * This is a helper method. You can implement it if you want to use it or
+	 * just ignore it. Its purpose is to send a Vote (YES/NO depending on the
+	 * state) to the given address.
 	 */
-	protected void sendVote(SocketAddress address,
-			Vote.State state, int version) throws IOException {
-		
-		//prepare vote
+	protected void sendVote(SocketAddress address, Vote.State state, int version) throws IOException {
+
+		// prepare vote
 		Vote vote = new Vote(state, version);
-		
-		//send vote
+
+		// send vote
 		sendObject(address, vote);
 	}
-	
+
 	/**
 	 * sends an object to the given address
 	 * 
-	 * @param address 
-	 * @param o			
+	 * @param address
+	 * @param o
 	 * @throws IOException
 	 */
-	protected void sendObject(SocketAddress address, Object o) throws IOException{
-		
-		ByteArrayOutputStream baos = new ByteArrayOutputStream(5000); 
+	protected void sendObject(SocketAddress address, Object o) throws IOException {
+
+		ByteArrayOutputStream baos = new ByteArrayOutputStream(5000);
 		ObjectOutputStream oos = new ObjectOutputStream(baos);
 		oos.flush();
 		oos.writeObject(o);
 		oos.flush();
-	
+
 		byte[] sendBuffer = baos.toByteArray();
 		DatagramPacket sendPacket = new DatagramPacket(sendBuffer, sendBuffer.length, address);
 		socket.send(sendPacket);
-		
+
 	}
 
 	/**
-	 * This is a helper method. You can implement it if you want to use it or just ignore it.
-	 * Its purpose is to extract the object stored in a DatagramPacket.
+	 * This is a helper method. You can implement it if you want to use it or
+	 * just ignore it. Its purpose is to extract the object stored in a
+	 * DatagramPacket.
 	 */
-	protected Object getObjectFromMessage(DatagramPacket packet)
-			throws IOException, ClassNotFoundException {
-		
+	protected Object getObjectFromMessage(DatagramPacket packet) throws IOException, ClassNotFoundException {
+
 		ByteArrayInputStream bais = new ByteArrayInputStream(packet.getData());
 		ObjectInputStream ois = new ObjectInputStream(new BufferedInputStream(bais));
 
