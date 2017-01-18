@@ -70,9 +70,8 @@ public class MajorityConsensus<T> {
 			DatagramPacket sendPacket = new DatagramPacket(sendBuffer, sendBuffer.length, address);
 
 			socket.send(sendPacket);
-
 		}
-		return nbio.unpack(nbio.receiveMessages(1000, replicas.size()));
+		return checkQuorum(nbio.unpack(nbio.receiveMessages(1000, replicas.size())));
 	}
 	
 	/**
@@ -125,8 +124,34 @@ public class MajorityConsensus<T> {
 	/**
 	 * Part d) Implement this method.
 	 */
-	protected Collection<MessageWithSource<Vote>> requestWriteVote() throws QuorumNotReachedException {
+	protected Collection<MessageWithSource<Vote>> requestWriteVote() throws QuorumNotReachedException, IOException, ClassNotFoundException {
 		// TODO: Implement me!
+
+		Iterator<SocketAddress> it = replicas.iterator();
+
+		ByteArrayOutputStream baos = new ByteArrayOutputStream(5000);
+
+		ObjectOutputStream oos = new ObjectOutputStream(baos);
+
+		RequestWriteVote requestWriteVote = new RequestWriteVote();
+
+		while(it.hasNext()){
+
+			SocketAddress address = it.next();
+
+			oos.flush();
+
+			oos.writeObject(requestWriteVote);
+
+			oos.flush();
+
+			byte[] sendBuffer = baos.toByteArray();
+
+			DatagramPacket sendPacket = new DatagramPacket(sendBuffer, sendBuffer.length, address);
+
+			socket.send(sendPacket);
+		}
+		return checkQuorum(nbio.unpack(nbio.receiveMessages(1000, replicas.size())));
 	}
 	
 	/**
