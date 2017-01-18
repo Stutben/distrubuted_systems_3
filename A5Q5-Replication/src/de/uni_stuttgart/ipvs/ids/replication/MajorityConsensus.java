@@ -11,6 +11,8 @@ import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
+import java.util.Vector;
 
 import de.uni_stuttgart.ipvs.ids.communication.MessageWithSource;
 import de.uni_stuttgart.ipvs.ids.communication.NonBlockingReceiver;
@@ -147,13 +149,37 @@ public class MajorityConsensus<T> {
 				
 		}	
 	}
-	}
 	
 	/**
 	 * Part c) Implement this method.
 	 */
 	protected T readReplica(SocketAddress replica) {
-		// TODO: Implement me!
+		//send ReadRequestMessage
+		
+		Collection<MessageWithSource<ValueResponseMessage<T>>> response = null;			
+		try{
+			ByteArrayOutputStream baos = new ByteArrayOutputStream(5000);
+			ObjectOutputStream oos = new ObjectOutputStream(baos);
+			
+			oos.flush();
+			oos.writeObject(new ReadRequestMessage());
+			oos.flush();
+
+			//receive answer
+			byte[] sendBuffer = baos.toByteArray();
+			DatagramPacket sendPacket = new DatagramPacket(sendBuffer, sendBuffer.length, replica);
+			socket.send(sendPacket);
+			Vector<DatagramPacket> packets = nbio.receiveMessages(200, 1);	
+			response = NonBlockingReceiver.unpack(packets);	
+		}
+		catch(Exception e) {
+		
+		}
+		
+		
+		Iterator<MessageWithSource<ValueResponseMessage<T>>> it = response.iterator();
+		
+		return it.next().getMessage().getValue();
 	}
 	
 	/**
@@ -168,7 +194,8 @@ public class MajorityConsensus<T> {
 	 * replicated value using the majority consensus protocol.
 	 */
 	public VersionedValue<T> get() throws QuorumNotReachedException {
-		// TODO: Implement me!
+		// TODO: Implement me
+		
 	}
 
 	/**
@@ -177,6 +204,7 @@ public class MajorityConsensus<T> {
 	 */
 	public void set(T value) throws QuorumNotReachedException {
 		// TODO: Implement me!
+		
 	}
 
 	/**

@@ -99,7 +99,7 @@ public class Replica<T> extends Thread {
 						if (lock == LockType.UNLOCKED) {
 							lock = LockType.WRITELOCK;
 							lockHolder = sender;
-							sendVote(sender, Vote.State.YES, value.getVersion());
+							sendVote(sender, Vote.State.YES, -1);
 							// locked
 						} else {
 							sendVote(sender, Vote.State.NO, -1);
