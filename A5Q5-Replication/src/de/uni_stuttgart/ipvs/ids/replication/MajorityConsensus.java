@@ -12,6 +12,7 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.Vector;
 
 import de.uni_stuttgart.ipvs.ids.communication.MessageWithSource;
 import de.uni_stuttgart.ipvs.ids.communication.NonBlockingReceiver;
@@ -174,7 +175,7 @@ public class MajorityConsensus<T> {
 				
 		}	
 	}
-	}
+	
 	
 	/**
 	 * Part c) Implement this method.
