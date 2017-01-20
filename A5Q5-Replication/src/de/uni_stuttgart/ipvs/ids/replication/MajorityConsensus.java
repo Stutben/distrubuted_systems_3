@@ -47,7 +47,7 @@ public class MajorityConsensus<T> {
 	 * Part c) Implement this method.
 	 */
 	protected Collection<MessageWithSource<Vote>> requestReadVote() throws QuorumNotReachedException, IOException, ClassNotFoundException {
-		// TODO: Implement me!
+
 		Iterator<SocketAddress> it = replicas.iterator();
 
 		ByteArrayOutputStream baos = new ByteArrayOutputStream(5000);
@@ -56,6 +56,7 @@ public class MajorityConsensus<T> {
 
 		RequestReadVote requestReadVote = new RequestReadVote();
 
+		// iterate over all replicas and send a requestReadVote to each replica
 		while(it.hasNext()){
 
 			SocketAddress address = it.next();
@@ -72,7 +73,8 @@ public class MajorityConsensus<T> {
 
 			socket.send(sendPacket);
 		}
-		return checkQuorum(nbio.unpack(nbio.receiveMessages(1000, replicas.size())));
+		// return all "YES" Messages if required Quorum is reached, else throw QuorumNotReachedException
+		return checkQuorum(nbio.unpack(nbio.receiveMessages(TIMEOUT, replicas.size())));
 	}
 	
 	/**
@@ -85,7 +87,8 @@ public class MajorityConsensus<T> {
 		
 		ByteArrayOutputStream baos = new ByteArrayOutputStream(5000);
 		ObjectOutputStream oos = new ObjectOutputStream(baos);
-		
+
+		//iterate over all (read-)locked replicas and send a ReleaseReadlock message to each of the locked replicas
 		while(lockedReplicas.isEmpty() == false){
 		
 			while (it.hasNext() == true){
@@ -106,7 +109,7 @@ public class MajorityConsensus<T> {
 				}
 			}
 			
-			Vector<DatagramPacket> packets = nbio.receiveMessages(200, lockedReplicas.size());
+			Vector<DatagramPacket> packets = nbio.receiveMessages(TIMEOUT, lockedReplicas.size());
 			Collection<MessageWithSource<Vote>> messages = null;
 			
 			try {
@@ -116,7 +119,8 @@ public class MajorityConsensus<T> {
 			{}
 			
 			Collection<SocketAddress> responders = MessageWithSource.getSources(messages);
-			
+
+			//remove all of the unlocked replicas from the list of locked replicas
 			lockedReplicas.removeAll(responders);
 				
 		}
@@ -126,7 +130,6 @@ public class MajorityConsensus<T> {
 	 * Part d) Implement this method.
 	 */
 	protected Collection<MessageWithSource<Vote>> requestWriteVote() throws QuorumNotReachedException, IOException, ClassNotFoundException {
-		// TODO: Implement me!
 
 		Iterator<SocketAddress> it = replicas.iterator();
 
@@ -136,6 +139,7 @@ public class MajorityConsensus<T> {
 
 		RequestWriteVote requestWriteVote = new RequestWriteVote();
 
+		// iterate over all replicas and send a requestWriteVote to each replica
 		while(it.hasNext()){
 
 			SocketAddress address = it.next();
@@ -152,7 +156,8 @@ public class MajorityConsensus<T> {
 
 			socket.send(sendPacket);
 		}
-		return checkQuorum(nbio.unpack(nbio.receiveMessages(1000, replicas.size())));
+		// return all "YES" Messages if required Quorum is reached, else throw QuorumNotReachedException
+		return checkQuorum(nbio.unpack(nbio.receiveMessages(TIMEOUT, replicas.size())));
 	}
 	
 	/**
@@ -164,7 +169,8 @@ public class MajorityConsensus<T> {
 		
 		ByteArrayOutputStream baos = new ByteArrayOutputStream(5000);
 		ObjectOutputStream oos = new ObjectOutputStream(baos);
-		
+
+		//iterate over all (write-)locked replicas and send a ReleaseWritelock message to each of the locked replicas
 		while(lockedReplicas.isEmpty() == false){
 		
 			while (it.hasNext() == true){
@@ -185,7 +191,7 @@ public class MajorityConsensus<T> {
 				}
 			}
 			
-			Vector<DatagramPacket> packets = nbio.receiveMessages(200, lockedReplicas.size());
+			Vector<DatagramPacket> packets = nbio.receiveMessages(TIMEOUT, lockedReplicas.size());
 			Collection<MessageWithSource<Vote>> messages = null;
 			
 			try {
@@ -195,7 +201,8 @@ public class MajorityConsensus<T> {
 			{}
 			
 			Collection<SocketAddress> responders = MessageWithSource.getSources(messages);
-			
+
+			//remove all of the unlocked replicas from the list of locked replicas
 			lockedReplicas.removeAll(responders);
 				
 		}	
@@ -221,7 +228,7 @@ public class MajorityConsensus<T> {
 			byte[] sendBuffer = baos.toByteArray();
 			DatagramPacket sendPacket = new DatagramPacket(sendBuffer, sendBuffer.length, replica);
 			socket.send(sendPacket);
-			Vector<DatagramPacket> packets = nbio.receiveMessages(200, 1);	
+			Vector<DatagramPacket> packets = nbio.receiveMessages(TIMEOUT, 1);
 			response = NonBlockingReceiver.unpack(packets);	
 		}
 		catch(Exception e) {
@@ -248,7 +255,7 @@ public class MajorityConsensus<T> {
 	public VersionedValue<T> get() throws QuorumNotReachedException {
 		
 		Collection<MessageWithSource<Vote>> lockedreplies = null;
-		
+		//get all replicas that answered with YES
 		try{
 			lockedreplies = this.requestReadVote();
 
@@ -264,6 +271,8 @@ public class MajorityConsensus<T> {
 		
 		int serialmax = 0;
 		SocketAddress maxSocket = null;
+
+		//get the replica with the most up-to-date value using the serialnumber
 		while (it.hasNext()){
 			
 			MessageWithSource<Vote> currentmessage = it.next();
@@ -274,9 +283,10 @@ public class MajorityConsensus<T> {
 				maxSocket = currentmessage.getSource();
 			}
 		}
-		
+		// get value from replica
 		VersionedValue<T> result = new VersionedValue(serialmax, this.readReplica(maxSocket));
-		
+
+		//release readlocks
 		this.releaseReadLock(MessageWithSource.getSources(lockedreplies));
 		
 		return result; 
@@ -305,7 +315,8 @@ public class MajorityConsensus<T> {
 		int readquorum = replicas.size() / 2;
 		int readlocks = 0;
 		int writelocks = 0;
-		
+
+		//iterate over replies and count "YES" and "NO" messages
 		while (it.hasNext()){
 			
 			MessageWithSource<Vote> currentMessage = it.next();
@@ -326,7 +337,8 @@ public class MajorityConsensus<T> {
 			}
 				
 		}
-		
+
+		//check if quorum to read/write is fulfilled
 		if(writelocks < writequorum) 
 		
 			throw new QuorumNotReachedException(writequorum, MessageWithSource.getSources(replies));
