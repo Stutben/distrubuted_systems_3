@@ -74,7 +74,9 @@ public class MajorityConsensus<T> {
 			socket.send(sendPacket);
 		}
 		// return all "YES" Messages if required Quorum is reached, else throw QuorumNotReachedException
-		return checkQuorum(nbio.unpack(nbio.receiveMessages(TIMEOUT, replicas.size())));
+		
+		Collection<MessageWithSource<Vote>> messages = NonBlockingReceiver.unpack(nbio.receiveMessages(TIMEOUT, replicas.size()));
+		return checkQuorum(messages);
 	}
 	
 	/**
@@ -157,7 +159,8 @@ public class MajorityConsensus<T> {
 			socket.send(sendPacket);
 		}
 		// return all "YES" Messages if required Quorum is reached, else throw QuorumNotReachedException
-		return checkQuorum(nbio.unpack(nbio.receiveMessages(TIMEOUT, replicas.size())));
+		Collection<MessageWithSource<Vote>> messages = NonBlockingReceiver.unpack(nbio.receiveMessages(TIMEOUT, replicas.size()));
+		return checkQuorum(messages);
 	}
 	
 	/**
@@ -264,6 +267,7 @@ public class MajorityConsensus<T> {
 
 			try{
 				socket.send(sendPacket);
+				nbio.receiveMessages(TIMEOUT, lockedReplicas.size());
 			}
 			catch(Exception e) {
 			}
@@ -299,14 +303,14 @@ public class MajorityConsensus<T> {
 			
 			MessageWithSource<Vote> currentmessage = it.next();
 			int currentserial = currentmessage.getMessage().getVersion();
-			if(currentserial > serialmax){
+			if(currentserial >= serialmax){
 				
 				serialmax = currentserial;
 				maxSocket = currentmessage.getSource();
 			}
 		}
 		// get value from replica
-		VersionedValue<T> result = new VersionedValue(serialmax, this.readReplica(maxSocket));
+		VersionedValue<T> result = (VersionedValue<T>)this.readReplica(maxSocket);
 
 		//release readlocks
 		this.releaseReadLock(MessageWithSource.getSources(lockedreplies));
@@ -353,6 +357,9 @@ public class MajorityConsensus<T> {
 
 		//write value
 		this.writeReplicas(MessageWithSource.getSources(lockedreplicas), valueToWrite);
+		
+		//release locks
+		this.releaseWriteLock(MessageWithSource.getSources(lockedreplicas));
 	}
 
 	/**
@@ -394,14 +401,9 @@ public class MajorityConsensus<T> {
 		}
 
 		//check if quorum to read/write is fulfilled
-		if(writelocks < writequorum) 
+		if(writelocks < writequorum && readlocks < readquorum) 
 		
 			throw new QuorumNotReachedException(writequorum, MessageWithSource.getSources(replies));
-
-		else if(readlocks < readquorum){
-			
-			throw new QuorumNotReachedException(readquorum, MessageWithSource.getSources(replies)); 
-		}
 		
 		return replies;
 	}

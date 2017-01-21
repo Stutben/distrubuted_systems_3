@@ -99,14 +99,14 @@ public class Replica<T> extends Thread {
 						if (lock == LockType.UNLOCKED) {
 							lock = LockType.WRITELOCK;
 							lockHolder = sender;
-							sendVote(sender, Vote.State.YES, -1);
+							sendVote(sender, Vote.State.YES, value.getVersion());
 							// locked
 						} else {
 							sendVote(sender, Vote.State.NO, -1);
 						}
 					} else if (o instanceof ReadRequestMessage) {
 						// check if sender is lockholder
-						if (lockHolder == sender && lock == LockType.READLOCK) {
+						if ( ((InetSocketAddress) lockHolder).getPort() == ((InetSocketAddress) sender).getPort() && lock == LockType.READLOCK) {
 							// prepare ValueResponseMessage
 							ValueResponseMessage<VersionedValue<T>> message = new ValueResponseMessage<VersionedValue<T>>(
 									value);
@@ -119,9 +119,9 @@ public class Replica<T> extends Thread {
 						}
 					} else if (o instanceof WriteRequestMessage) {
 						// check if sender is lockholder
-						if (lockHolder == sender && lock == LockType.WRITELOCK) {
+						if (((InetSocketAddress) lockHolder).getPort() == ((InetSocketAddress) sender).getPort() && lock == LockType.WRITELOCK) {
 							// write value
-							value = (VersionedValue<T>) o;
+							value = new VersionedValue(((WriteRequestMessage) o).getVersion(), ((WriteRequestMessage) o).getValue());
 
 							// send ack
 							sendVote(sender, Vote.State.YES, -1);
@@ -131,7 +131,7 @@ public class Replica<T> extends Thread {
 						}
 					} else if (o instanceof ReleaseReadLock) {
 						// check if sender is lockholder
-						if (lockHolder == sender && lock == LockType.READLOCK) {
+						if (((InetSocketAddress) lockHolder).getPort() == ((InetSocketAddress) sender).getPort() && lock == LockType.READLOCK) {
 							// release lock
 							lockHolder = null;
 							lock = LockType.UNLOCKED;
@@ -145,7 +145,7 @@ public class Replica<T> extends Thread {
 						}
 					} else if (o instanceof ReleaseWriteLock) {
 						// check if sender is lockholder
-						if (lockHolder == sender && lock == LockType.WRITELOCK) {
+						if (((InetSocketAddress) lockHolder).getPort() == ((InetSocketAddress) sender).getPort() && lock == LockType.WRITELOCK) {
 							// release lock
 							lockHolder = null;
 							lock = LockType.UNLOCKED;
