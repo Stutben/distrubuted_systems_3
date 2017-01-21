@@ -244,15 +244,37 @@ public class MajorityConsensus<T> {
 	/**
 	 * Part d) Implement this method.
 	 */
-	protected void writeReplicas(Collection<SocketAddress> lockedReplicas, VersionedValue<T> newValue) {
+	protected void writeReplicas(Collection<SocketAddress> lockedReplicas, VersionedValue<T> newValue) throws IOException {
 		// TODO: Implement me!
+
+		WriteRequestMessage writeRequestMessage = new WriteRequestMessage(newValue.getVersion(), newValue.getValue());
+		ByteArrayOutputStream baos = new ByteArrayOutputStream(5000);
+		ObjectOutputStream oos = new ObjectOutputStream(baos);
+		Iterator<SocketAddress> it = lockedReplicas.iterator();
+
+		while(it.hasNext()){
+			SocketAddress socketaddr =  it.next();
+
+			oos.flush();
+			oos.writeObject(writeRequestMessage);
+			oos.flush();
+
+			byte[] sendBuffer = baos.toByteArray();
+			DatagramPacket sendPacket = new DatagramPacket(sendBuffer, sendBuffer.length, socketaddr);
+
+			try{
+				socket.send(sendPacket);
+			}
+			catch(Exception e) {
+			}
+		}
 	}
 	
 	/**
 	 * Part c) Implement this method (and checkQuorum(), see below) to read the
 	 * replicated value using the majority consensus protocol.
 	 */
-	public VersionedValue<T> get() throws QuorumNotReachedException {
+	public VersionedValue<T> get() throws QuorumNotReachedException, IOException, ClassNotFoundException {
 		
 		Collection<MessageWithSource<Vote>> lockedreplies = null;
 		//get all replicas that answered with YES
@@ -296,8 +318,41 @@ public class MajorityConsensus<T> {
 	 * Part d) Implement this method to set the
 	 * replicated value using the majority consensus protocol.
 	 */
-	public void set(T value) throws QuorumNotReachedException {
+	public void set(T value) throws QuorumNotReachedException, IOException, ClassNotFoundException {
 		// TODO: Implement me!
+
+		Collection<MessageWithSource<Vote>> lockedreplicas = null;
+		//get all replicas that answered with YES
+		try{
+			lockedreplicas = this.requestWriteVote();
+
+		}
+		catch(QuorumNotReachedException e){
+
+			this.releaseWriteLock(e.getAchieved());
+			throw e;
+		}
+
+
+		Iterator<MessageWithSource<Vote>> it = lockedreplicas.iterator();
+
+		int serialmax = 0;
+
+		//get the replica with the most up-to-date value using the serialnumber
+		while (it.hasNext()){
+
+			MessageWithSource<Vote> currentmessage = it.next();
+			int currentserial = currentmessage.getMessage().getVersion();
+			if(currentserial > serialmax){
+
+				serialmax = currentserial;
+			}
+		}
+		// create new value to be written
+		VersionedValue<T> valueToWrite = new VersionedValue(serialmax+1, value);
+
+		//write value
+		this.writeReplicas(MessageWithSource.getSources(lockedreplicas), valueToWrite);
 	}
 
 	/**
