@@ -65,107 +65,108 @@ public class Replica<T> extends Thread {
 	 */
 	public void run() {
 
-		try {
-			// receive a message
-			byte[] receiveBuffer = new byte[5000];
-			DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
-			socket.receive(receivePacket);
-			Object o = getObjectFromMessage(receivePacket);
+		while (true) {
+			try {
+				// receive a message
+				byte[] receiveBuffer = new byte[5000];
+				DatagramPacket receivePacket = new DatagramPacket(receiveBuffer, receiveBuffer.length);
+				socket.receive(receivePacket);
+				Object o = getObjectFromMessage(receivePacket);
 
-			
-			SocketAddress sender = receivePacket.getSocketAddress();
+				SocketAddress sender = receivePacket.getSocketAddress();
 
-			//availability
-			double failurePosibility = 0;
-			if (lock == LockType.UNLOCKED) {
-				failurePosibility = 1 - availability;
-			}
+				// availability
+				double failurePosibility = 0;
+				if (lock == LockType.UNLOCKED) {
+					failurePosibility = 1 - availability;
+				}
 
-			if (Math.random() >= failurePosibility) {
-				
-				//logic
-				if (o instanceof RequestReadVote) {
-					// no write lock
-					if (lock != LockType.WRITELOCK) {
-						lock = LockType.READLOCK;
-						lockHolder = sender;
-						sendVote(sender, Vote.State.YES, value.getVersion());
-						// write lock
-					} else {
-						sendVote(sender, Vote.State.NO, -1);
-					}
-				} else if (o instanceof RequestWriteVote) {
-					// no read or write lock
-					if (lock == LockType.UNLOCKED) {
-						lock = LockType.WRITELOCK;
-						lockHolder = sender;
-						sendVote(sender, Vote.State.YES, value.getVersion());
-						// locked
-					} else {
-						sendVote(sender, Vote.State.NO, -1);
-					}
-				} else if (o instanceof ReadRequestMessage) {
-					// check if sender is lockholder
-					if (lockHolder == sender && lock == LockType.READLOCK) {
-						// prepare ValueResponseMessage
-						ValueResponseMessage<VersionedValue<T>> message = new ValueResponseMessage<VersionedValue<T>>(
-								value);
+				if (Math.random() >= failurePosibility) {
 
-						// send message
-						sendObject(sender, message);
-						// sender is not lockholder
-					} else {
-						sendVote(sender, Vote.State.NO, -1);
-					}
-				} else if (o instanceof WriteRequestMessage) {
-					// check if sender is lockholder
-					if (lockHolder == sender && lock == LockType.WRITELOCK) {
-						// write value
-						value = (VersionedValue<T>) o;
+					// logic
+					if (o instanceof RequestReadVote) {
+						// no write lock
+						if (lock != LockType.WRITELOCK) {
+							lock = LockType.READLOCK;
+							lockHolder = sender;
+							sendVote(sender, Vote.State.YES, value.getVersion());
+							// write lock
+						} else {
+							sendVote(sender, Vote.State.NO, -1);
+						}
+					} else if (o instanceof RequestWriteVote) {
+						// no read or write lock
+						if (lock == LockType.UNLOCKED) {
+							lock = LockType.WRITELOCK;
+							lockHolder = sender;
+							sendVote(sender, Vote.State.YES, -1);
+							// locked
+						} else {
+							sendVote(sender, Vote.State.NO, -1);
+						}
+					} else if (o instanceof ReadRequestMessage) {
+						// check if sender is lockholder
+						if (lockHolder == sender && lock == LockType.READLOCK) {
+							// prepare ValueResponseMessage
+							ValueResponseMessage<VersionedValue<T>> message = new ValueResponseMessage<VersionedValue<T>>(
+									value);
 
-						// send ack
-						sendVote(sender, Vote.State.YES, -1);
-						// sender is not lockholder
-					} else {
-						sendVote(sender, Vote.State.NO, -1);
-					}
-				} else if (o instanceof ReleaseReadLock) {
-					// check if sender is lockholder
-					if (lockHolder == sender && lock == LockType.READLOCK) {
-						// release lock
-						lockHolder = null;
-						lock = LockType.UNLOCKED;
+							// send message
+							sendObject(sender, message);
+							// sender is not lockholder
+						} else {
+							sendVote(sender, Vote.State.NO, -1);
+						}
+					} else if (o instanceof WriteRequestMessage) {
+						// check if sender is lockholder
+						if (lockHolder == sender && lock == LockType.WRITELOCK) {
+							// write value
+							value = (VersionedValue<T>) o;
 
-						// send ack
-						sendVote(sender, Vote.State.YES, -1);
-						// sender is not lockholder
-					} else {
-						// send nack
-						sendVote(sender, Vote.State.NO, -1);
-					}
-				} else if (o instanceof ReleaseWriteLock) {
-					// check if sender is lockholder
-					if (lockHolder == sender && lock == LockType.WRITELOCK) {
-						// release lock
-						lockHolder = null;
-						lock = LockType.UNLOCKED;
+							// send ack
+							sendVote(sender, Vote.State.YES, -1);
+							// sender is not lockholder
+						} else {
+							sendVote(sender, Vote.State.NO, -1);
+						}
+					} else if (o instanceof ReleaseReadLock) {
+						// check if sender is lockholder
+						if (lockHolder == sender && lock == LockType.READLOCK) {
+							// release lock
+							lockHolder = null;
+							lock = LockType.UNLOCKED;
 
-						// send ack
-						sendVote(sender, Vote.State.YES, -1);
-						// sender is not lockholder
-					} else {
-						// send nack
-						sendVote(sender, Vote.State.NO, -1);
+							// send ack
+							sendVote(sender, Vote.State.YES, -1);
+							// sender is not lockholder
+						} else {
+							// send nack
+							sendVote(sender, Vote.State.NO, -1);
+						}
+					} else if (o instanceof ReleaseWriteLock) {
+						// check if sender is lockholder
+						if (lockHolder == sender && lock == LockType.WRITELOCK) {
+							// release lock
+							lockHolder = null;
+							lock = LockType.UNLOCKED;
+
+							// send ack
+							sendVote(sender, Vote.State.YES, -1);
+							// sender is not lockholder
+						} else {
+							// send nack
+							sendVote(sender, Vote.State.NO, -1);
+						}
 					}
 				}
-			}
 
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (ClassNotFoundException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (ClassNotFoundException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
 
 	}
